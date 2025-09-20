@@ -1,0 +1,12 @@
+yfinance
+streamlit
+agno
+plotly
+python-multipart
+google-genai
+google-generativeai
+ddgs
+serpapi
+GoogleSearch
+datetime
+google-search-results

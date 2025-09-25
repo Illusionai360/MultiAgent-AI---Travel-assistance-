@@ -1,16 +1,11 @@
 import streamlit as st
 import json
 import os
-#from serpapi import GoogleSearch 
+from serpapi import GoogleSearch 
 from agno.agent import Agent
 from agno.tools.serpapi import SerpApiTools
 from agno.models.google import Gemini
 from datetime import datetime
-
-#from googlesearch import search
-from ddgs import DDGS
-import serpapi
-from serpapi import GoogleSearch as SerpGoogleSearch 
 
 import streamlit as st  
 
@@ -144,7 +139,7 @@ def fetch_flights(source, destination, departure_date, return_date):
         "hl": "en",
         "api_key": SERPAPI_KEY
     }
-    search = SerpGoogleSearch(params)
+    search = GoogleSearch(params)
     results = search.get_dict()
     return results
 
@@ -304,7 +299,3 @@ if st.button("🚀 Generate Travel Plan"):
     st.write(itinerary.content)
 
     st.success("✅ Travel plan generated successfully!")
-
-
-
-

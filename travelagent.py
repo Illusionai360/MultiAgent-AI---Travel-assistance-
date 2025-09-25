@@ -1,12 +1,13 @@
 import streamlit as st
 import json
 import os
-from serpapi import GoogleSearch 
+ 
 from agno.agent import Agent
 from agno.tools.serpapi import SerpApiTools
 from agno.models.google import Gemini
 from datetime import datetime
-
+from serpapi import GoogleSearch
+from serpapi import GoogleSearch as SerpGoogleSearch
 import streamlit as st  
 
 # Set up Streamlit UI with a travel-friendly theme
@@ -299,3 +300,4 @@ if st.button("🚀 Generate Travel Plan"):
     st.write(itinerary.content)
 
     st.success("✅ Travel plan generated successfully!")
+

@@ -1,13 +1,12 @@
 import streamlit as st
 import json
 import os
- 
+from serpapi import GoogleSearch 
 from agno.agent import Agent
 from agno.tools.serpapi import SerpApiTools
 from agno.models.google import Gemini
 from datetime import datetime
-#from serpapi import GoogleSearch
-#from serpapi import GoogleSearch as SerpGoogleSearch
+
 import streamlit as st  
 
 # Set up Streamlit UI with a travel-friendly theme
@@ -117,17 +116,6 @@ SERPAPI_KEY = "297ceeab91a57e9c6644536c9d6addbd86f6da82f44fba2fcba97dce8148ebb2"
 GOOGLE_API_KEY = "AIzaSyA-i0mbqZRTXHpZ0Drrd0DQP3S81FPrVYg"
 os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
-params = {
-        "engine": "google_flights",
-        "departure_id": source,
-        "arrival_id": destination,
-        "outbound_date": str(departure_date),
-        "return_date": str(return_date),
-        "currency": "INR",
-        "hl": "en",
-        "api_key": SERPAPI_KEY
-    }
-
 # Function to fetch flight data
 def fetch_flights(source, destination, departure_date, return_date):
     params = {
@@ -140,12 +128,19 @@ def fetch_flights(source, destination, departure_date, return_date):
         "hl": "en",
         "api_key": SERPAPI_KEY
     }
-    search = GoogleSearch(params)
-    results = search.get_dict()
-    return results
+    try:
+        search = GoogleSearch(params)
+        results = search.get_dict()
+        return results
+    except Exception as e:
+        st.error(f"Error fetching flight data: {str(e)}")
+        return None
 
 # Function to extract top 3 cheapest flights
 def extract_cheapest_flights(flight_data):
+    if not flight_data:
+        return []
+    
     best_flights = flight_data.get("best_flights", [])
     sorted_flights = sorted(best_flights, key=lambda x: x.get("price", float("inf")))[:3]  # Get top 3 cheapest
     return sorted_flights
@@ -157,7 +152,7 @@ researcher = Agent(
         "Identify the travel destination specified by the user.",
         "Gather detailed information on the destination, including climate, culture, and safety tips.",
         "Find popular attractions, landmarks, and must-visit places.",
-        "Search for activities that match the user’s interests and travel style.",
+        "Search for activities that match the user's interests and travel style.",
         "Prioritize information from reliable sources and official travel guides.",
         "Provide well-structured summaries with key insights and recommendations."
     ],
@@ -197,109 +192,127 @@ hotel_restaurant_finder = Agent(
 if st.button("🚀 Generate Travel Plan"):
     with st.spinner("✈️ Fetching best flight options..."):
         flight_data = fetch_flights(source, destination, departure_date, return_date)
-        cheapest_flights = extract_cheapest_flights(flight_data)
+        if flight_data:
+            cheapest_flights = extract_cheapest_flights(flight_data)
+        else:
+            cheapest_flights = []
+            st.error("Failed to fetch flight data. Please check your API keys and try again.")
 
-    # AI Processing
-    with st.spinner("🔍 Researching best attractions & activities..."):
-        research_prompt = (
-            f"Research the best attractions and activities in {destination} for a {num_days}-day {travel_theme.lower()} trip. "
-            f"The traveler enjoys: {activity_preferences}. Budget: {budget}. Flight Class: {flight_class}. "
-            f"Hotel Rating: {hotel_rating}. Visa Requirement: {visa_required}. Travel Insurance: {travel_insurance}."
-        )
-        research_results = researcher.run(research_prompt, stream=False)
-
-    with st.spinner("🏨 Searching for hotels & restaurants..."):
-        hotel_restaurant_prompt = (
-            f"Find the best hotels and restaurants near popular attractions in {destination} for a {travel_theme.lower()} trip. "
-            f"Budget: {budget}. Hotel Rating: {hotel_rating}. Preferred activities: {activity_preferences}."
-        )
-        hotel_restaurant_results = hotel_restaurant_finder.run(hotel_restaurant_prompt, stream=False)
-
-    with st.spinner("🗺️ Creating your personalized itinerary..."):
-        planning_prompt = (
-            f"Based on the following data, create a {num_days}-day itinerary for a {travel_theme.lower()} trip to {destination}. "
-            f"The traveler enjoys: {activity_preferences}. Budget: {budget}. Flight Class: {flight_class}. Hotel Rating: {hotel_rating}. "
-            f"Visa Requirement: {visa_required}. Travel Insurance: {travel_insurance}. Research: {research_results.content}. "
-            f"Flights: {json.dumps(cheapest_flights)}. Hotels & Restaurants: {hotel_restaurant_results.content}."
-        )
-        itinerary = planner.run(planning_prompt, stream=False)
-
-    # Display Results
-    st.subheader("✈️ Cheapest Flight Options")
+    # Only proceed if we have flight data
     if cheapest_flights:
-        cols = st.columns(len(cheapest_flights))
-        for idx, flight in enumerate(cheapest_flights):
-            with cols[idx]:
-                airline_logo = flight.get("airline_logo", "")
-                airline_name = flight.get("airline", "Unknown Airline")
-                price = flight.get("price", "Not Available")
-                total_duration = flight.get("total_duration", "N/A")
-                
-                flights_info = flight.get("flights", [{}])
-                departure = flights_info[0].get("departure_airport", {})
-                arrival = flights_info[-1].get("arrival_airport", {})
-                airline_name = flights_info[0].get("airline", "Unknown Airline") 
-                
-                departure_time = format_datetime(departure.get("time", "N/A"))
-                arrival_time = format_datetime(arrival.get("time", "N/A"))
-                
-                departure_token = flight.get("departure_token", "")
+        # AI Processing
+        with st.spinner("🔍 Researching best attractions & activities..."):
+            research_prompt = (
+                f"Research the best attractions and activities in {destination} for a {num_days}-day {travel_theme.lower()} trip. "
+                f"The traveler enjoys: {activity_preferences}. Budget: {budget}. Flight Class: {flight_class}. "
+                f"Hotel Rating: {hotel_rating}. Visa Requirement: {visa_required}. Travel Insurance: {travel_insurance}."
+            )
+            research_results = researcher.run(research_prompt, stream=False)
 
-                if departure_token:
-                    params_with_token = {
-                        **params,
-                        "departure_token": departure_token  # Add the token here
-                    }
-                    search_with_token = GoogleSearch(params_with_token)
-                    results_with_booking = search_with_token.get_dict()
+        with st.spinner("🏨 Searching for hotels & restaurants..."):
+            hotel_restaurant_prompt = (
+                f"Find the best hotels and restaurants near popular attractions in {destination} for a {travel_theme.lower()} trip. "
+                f"Budget: {budget}. Hotel Rating: {hotel_rating}. Preferred activities: {activity_preferences}."
+            )
+            hotel_restaurant_results = hotel_restaurant_finder.run(hotel_restaurant_prompt, stream=False)
 
-                    booking_options = results_with_booking['best_flights'][idx]['booking_token']
+        with st.spinner("🗺️ Creating your personalized itinerary..."):
+            planning_prompt = (
+                f"Based on the following data, create a {num_days}-day itinerary for a {travel_theme.lower()} trip to {destination}. "
+                f"The traveler enjoys: {activity_preferences}. Budget: {budget}. Flight Class: {flight_class}. Hotel Rating: {hotel_rating}. "
+                f"Visa Requirement: {visa_required}. Travel Insurance: {travel_insurance}. Research: {research_results.content}. "
+                f"Flights: {json.dumps(cheapest_flights)}. Hotels & Restaurants: {hotel_restaurant_results.content}."
+            )
+            itinerary = planner.run(planning_prompt, stream=False)
 
-                booking_link = f"https://www.google.com/travel/flights?tfs="+booking_options if booking_options else "#"
-                print(booking_link)
-                # Flight card layout
-                st.markdown(
-                    f"""
-                    <div style="
-                        border: 2px solid #ddd; 
-                        border-radius: 10px; 
-                        padding: 15px; 
-                        text-align: center;
-                        box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
-                        background-color: #f9f9f9;
-                        margin-bottom: 20px;
-                    ">
-                        <img src="{airline_logo}" width="100" alt="Flight Logo" />
-                        <h3 style="margin: 10px 0;">{airline_name}</h3>
-                        <p><strong>Departure:</strong> {departure_time}</p>
-                        <p><strong>Arrival:</strong> {arrival_time}</p>
-                        <p><strong>Duration:</strong> {total_duration} min</p>
-                        <h2 style="color: #008000;">💰 {price}</h2>
-                        <a href="{booking_link}" target="_blank" style="
-                            display: inline-block;
-                            padding: 10px 20px;
-                            font-size: 16px;
-                            font-weight: bold;
-                            color: #fff;
-                            background-color: #007bff;
-                            text-decoration: none;
-                            border-radius: 5px;
-                            margin-top: 10px;
-                        ">🔗 Book Now</a>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
+        # Display Results
+        st.subheader("✈️ Cheapest Flight Options")
+        if cheapest_flights:
+            cols = st.columns(len(cheapest_flights))
+            for idx, flight in enumerate(cheapest_flights):
+                with cols[idx]:
+                    airline_logo = flight.get("airline_logo", "")
+                    airline_name = flight.get("airline", "Unknown Airline")
+                    price = flight.get("price", "Not Available")
+                    total_duration = flight.get("total_duration", "N/A")
+                    
+                    flights_info = flight.get("flights", [{}])
+                    departure = flights_info[0].get("departure_airport", {})
+                    arrival = flights_info[-1].get("arrival_airport", {})
+                    airline_name = flights_info[0].get("airline", "Unknown Airline") 
+                    
+                    departure_time = format_datetime(departure.get("time", "N/A"))
+                    arrival_time = format_datetime(arrival.get("time", "N/A"))
+                    
+                    departure_token = flight.get("departure_token", "")
+                    booking_link = "#"
+
+                    # Try to get booking token if available
+                    if departure_token:
+                        try:
+                            params_with_token = {
+                                "engine": "google_flights",
+                                "departure_id": source,
+                                "arrival_id": destination,
+                                "outbound_date": str(departure_date),
+                                "return_date": str(return_date),
+                                "currency": "INR",
+                                "hl": "en",
+                                "api_key": SERPAPI_KEY,
+                                "departure_token": departure_token
+                            }
+                            search_with_token = GoogleSearch(params_with_token)
+                            results_with_booking = search_with_token.get_dict()
+                            
+                            if 'best_flights' in results_with_booking and idx < len(results_with_booking['best_flights']):
+                                booking_token = results_with_booking['best_flights'][idx].get('booking_token', '')
+                                if booking_token:
+                                    booking_link = f"https://www.google.com/travel/flights?tfs={booking_token}"
+                        except Exception as e:
+                            st.warning(f"Could not generate booking link: {str(e)}")
+
+                    # Flight card layout
+                    st.markdown(
+                        f"""
+                        <div style="
+                            border: 2px solid #ddd; 
+                            border-radius: 10px; 
+                            padding: 15px; 
+                            text-align: center;
+                            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+                            background-color: #f9f9f9;
+                            margin-bottom: 20px;
+                        ">
+                            <img src="{airline_logo}" width="100" alt="Flight Logo" />
+                            <h3 style="margin: 10px 0;">{airline_name}</h3>
+                            <p><strong>Departure:</strong> {departure_time}</p>
+                            <p><strong>Arrival:</strong> {arrival_time}</p>
+                            <p><strong>Duration:</strong> {total_duration} min</p>
+                            <h2 style="color: #008000;">💰 {price}</h2>
+                            <a href="{booking_link}" target="_blank" style="
+                                display: inline-block;
+                                padding: 10px 20px;
+                                font-size: 16px;
+                                font-weight: bold;
+                                color: #fff;
+                                background-color: #007bff;
+                                text-decoration: none;
+                                border-radius: 5px;
+                                margin-top: 10px;
+                            ">🔗 Book Now</a>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+        else:
+            st.warning("⚠️ No flight data available.")
+
+        st.subheader("🏨 Hotels & Restaurants")
+        st.write(hotel_restaurant_results.content)
+
+        st.subheader("🗺️ Your Personalized Itinerary")
+        st.write(itinerary.content)
+
+        st.success("✅ Travel plan generated successfully!")
     else:
-        st.warning("⚠️ No flight data available.")
-
-    st.subheader("🏨 Hotels & Restaurants")
-    st.write(hotel_restaurant_results.content)
-
-    st.subheader("🗺️ Your Personalized Itinerary")
-    st.write(itinerary.content)
-
-    st.success("✅ Travel plan generated successfully!")
-
-
-
+        st.error("❌ Could not generate travel plan due to flight data issues. Please try again.")

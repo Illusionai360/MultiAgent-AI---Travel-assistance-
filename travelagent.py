@@ -1,7 +1,7 @@
 import streamlit as st
 import json
 import os
-from serpapi import GoogleSearch 
+#from serpapi import GoogleSearch 
 from agno.agent import Agent
 from agno.tools.serpapi import SerpApiTools
 from agno.models.google import Gemini
@@ -144,7 +144,7 @@ def fetch_flights(source, destination, departure_date, return_date):
         "hl": "en",
         "api_key": SERPAPI_KEY
     }
-    search = GoogleSearch(params)
+    search = SerpGoogleSearch(params)
     results = search.get_dict()
     return results
 
@@ -304,6 +304,7 @@ if st.button("🚀 Generate Travel Plan"):
     st.write(itinerary.content)
 
     st.success("✅ Travel plan generated successfully!")
+
 
 
 

@@ -1,15 +1,16 @@
 import streamlit as st
 import json
 import os
-#from serpapi import GoogleSearch 
+from serpapi import GoogleSearch 
 from agno.agent import Agent
 from agno.tools.serpapi import SerpApiTools
 from agno.models.google import Gemini
 from datetime import datetime
 
-from googlesearch import search
+#from googlesearch import search
 from ddgs import DDGS
 import serpapi
+from serpapi import GoogleSearch as SerpGoogleSearch 
 
 import streamlit as st  
 
@@ -303,5 +304,6 @@ if st.button("🚀 Generate Travel Plan"):
     st.write(itinerary.content)
 
     st.success("✅ Travel plan generated successfully!")
+
 
 

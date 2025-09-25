@@ -7,6 +7,4 @@ google-genai
 google-generativeai
 ddgs
 serpapi
-GoogleSearch
-datetime
-google-search-results
+googlesearch-python

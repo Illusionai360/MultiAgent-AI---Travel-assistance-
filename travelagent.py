@@ -1,11 +1,13 @@
 import streamlit as st
 import json
 import os
-import requests
+from serpapi import GoogleSearch 
 from agno.agent import Agent
 from agno.tools.serpapi import SerpApiTools
 from agno.models.google import Gemini
 from datetime import datetime
+
+import streamlit as st  
 
 # Set up Streamlit UI with a travel-friendly theme
 st.set_page_config(page_title="🌍 AI Travel Planner", layout="wide")
@@ -114,7 +116,18 @@ SERPAPI_KEY = "297ceeab91a57e9c6644536c9d6addbd86f6da82f44fba2fcba97dce8148ebb2"
 GOOGLE_API_KEY = "AIzaSyA-i0mbqZRTXHpZ0Drrd0DQP3S81FPrVYg"
 os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
-# Function to fetch flight data using SerpAPI
+params = {
+        "engine": "google_flights",
+        "departure_id": source,
+        "arrival_id": destination,
+        "outbound_date": str(departure_date),
+        "return_date": str(return_date),
+        "currency": "INR",
+        "hl": "en",
+        "api_key": SERPAPI_KEY
+    }
+
+# Function to fetch flight data
 def fetch_flights(source, destination, departure_date, return_date):
     params = {
         "engine": "google_flights",
@@ -126,90 +139,15 @@ def fetch_flights(source, destination, departure_date, return_date):
         "hl": "en",
         "api_key": SERPAPI_KEY
     }
-    
-    try:
-        # Using requests to call SerpAPI directly
-        api_url = "https://serpapi.com/search"
-        response = requests.get(api_url, params=params)
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            st.error(f"API Error: {response.status_code} - {response.text}")
-            return None
-    except Exception as e:
-        st.error(f"Error fetching flight data: {str(e)}")
-        return None
+    search = GoogleSearch(params)
+    results = search.get_dict()
+    return results
 
 # Function to extract top 3 cheapest flights
 def extract_cheapest_flights(flight_data):
-    if not flight_data:
-        return []
-    
     best_flights = flight_data.get("best_flights", [])
-    # Safely extract price and sort
-    sorted_flights = []
-    for flight in best_flights:
-        price = flight.get("price", 0)
-        # Convert price to integer if it's a string
-        if isinstance(price, str):
-            try:
-                price = int(price.replace('₹', '').replace(',', '').strip())
-            except:
-                price = float('inf')
-        sorted_flights.append((flight, price))
-    
-    sorted_flights.sort(key=lambda x: x[1])
-    return [flight for flight, _ in sorted_flights[:3]]
-
-# Function to create mock flight data for demo purposes
-def create_mock_flight_data():
-    return {
-        "best_flights": [
-            {
-                "airline": "Air India",
-                "airline_logo": "https://via.placeholder.com/100x50.png?text=Air+India",
-                "price": "₹8,500",
-                "total_duration": "120",
-                "flights": [
-                    {
-                        "departure_airport": {"time": "2025-03-06 06:20"},
-                        "arrival_airport": {"time": "2025-03-06 08:20"},
-                        "airline": "Air India"
-                    }
-                ],
-                "departure_token": "mock_token_1"
-            },
-            {
-                "airline": "IndiGo",
-                "airline_logo": "https://via.placeholder.com/100x50.png?text=IndiGo",
-                "price": "₹7,200",
-                "total_duration": "135",
-                "flights": [
-                    {
-                        "departure_airport": {"time": "2025-03-06 14:30"},
-                        "arrival_airport": {"time": "2025-03-06 16:45"},
-                        "airline": "IndiGo"
-                    }
-                ],
-                "departure_token": "mock_token_2"
-            },
-            {
-                "airline": "Vistara",
-                "airline_logo": "https://via.placeholder.com/100x50.png?text=Vistara",
-                "price": "₹9,800",
-                "total_duration": "125",
-                "flights": [
-                    {
-                        "departure_airport": {"time": "2025-03-06 09:15"},
-                        "arrival_airport": {"time": "2025-03-06 11:20"},
-                        "airline": "Vistara"
-                    }
-                ],
-                "departure_token": "mock_token_3"
-            }
-        ]
-    }
+    sorted_flights = sorted(best_flights, key=lambda x: x.get("price", float("inf")))[:3]  # Get top 3 cheapest
+    return sorted_flights
 
 # AI Agents
 researcher = Agent(
@@ -218,12 +156,13 @@ researcher = Agent(
         "Identify the travel destination specified by the user.",
         "Gather detailed information on the destination, including climate, culture, and safety tips.",
         "Find popular attractions, landmarks, and must-visit places.",
-        "Search for activities that match the user's interests and travel style.",
+        "Search for activities that match the user’s interests and travel style.",
         "Prioritize information from reliable sources and official travel guides.",
         "Provide well-structured summaries with key insights and recommendations."
     ],
     model=Gemini(id="gemini-2.0-flash-exp"),
     tools=[SerpApiTools(api_key=SERPAPI_KEY)],
+    #add_datetime_to_instructions=True,
 )
 
 planner = Agent(
@@ -236,6 +175,7 @@ planner = Agent(
         "Present the itinerary in a structured format."
     ],
     model=Gemini(id="gemini-2.0-flash-exp"),
+    #add_datetime_to_instructions=True,
 )
 
 hotel_restaurant_finder = Agent(
@@ -249,26 +189,14 @@ hotel_restaurant_finder = Agent(
     ],
     model=Gemini(id="gemini-2.0-flash-exp"),
     tools=[SerpApiTools(api_key=SERPAPI_KEY)],
+    #add_datetime_to_instructions=True,
 )
 
 # Generate Travel Plan
 if st.button("🚀 Generate Travel Plan"):
-    use_mock_data = st.checkbox("Use mock data (if real API fails)", value=True)
-    
     with st.spinner("✈️ Fetching best flight options..."):
-        if use_mock_data:
-            flight_data = create_mock_flight_data()
-            st.info("📊 Using mock flight data for demonstration")
-        else:
-            flight_data = fetch_flights(source, destination, departure_date, return_date)
-        
-        if flight_data:
-            cheapest_flights = extract_cheapest_flights(flight_data)
-        else:
-            cheapest_flights = []
-            st.error("Failed to fetch flight data. Using mock data instead.")
-            flight_data = create_mock_flight_data()
-            cheapest_flights = extract_cheapest_flights(flight_data)
+        flight_data = fetch_flights(source, destination, departure_date, return_date)
+        cheapest_flights = extract_cheapest_flights(flight_data)
 
     # AI Processing
     with st.spinner("🔍 Researching best attractions & activities..."):
@@ -277,35 +205,23 @@ if st.button("🚀 Generate Travel Plan"):
             f"The traveler enjoys: {activity_preferences}. Budget: {budget}. Flight Class: {flight_class}. "
             f"Hotel Rating: {hotel_rating}. Visa Requirement: {visa_required}. Travel Insurance: {travel_insurance}."
         )
-        try:
-            research_results = researcher.run(research_prompt, stream=False)
-        except Exception as e:
-            st.error(f"Research failed: {str(e)}")
-            research_results = type('obj', (object,), {'content': 'Research content unavailable due to API limitations.'})
+        research_results = researcher.run(research_prompt, stream=False)
 
     with st.spinner("🏨 Searching for hotels & restaurants..."):
         hotel_restaurant_prompt = (
             f"Find the best hotels and restaurants near popular attractions in {destination} for a {travel_theme.lower()} trip. "
             f"Budget: {budget}. Hotel Rating: {hotel_rating}. Preferred activities: {activity_preferences}."
         )
-        try:
-            hotel_restaurant_results = hotel_restaurant_finder.run(hotel_restaurant_prompt, stream=False)
-        except Exception as e:
-            st.error(f"Hotel search failed: {str(e)}")
-            hotel_restaurant_results = type('obj', (object,), {'content': 'Hotel and restaurant information unavailable due to API limitations.'})
+        hotel_restaurant_results = hotel_restaurant_finder.run(hotel_restaurant_prompt, stream=False)
 
     with st.spinner("🗺️ Creating your personalized itinerary..."):
         planning_prompt = (
             f"Based on the following data, create a {num_days}-day itinerary for a {travel_theme.lower()} trip to {destination}. "
             f"The traveler enjoys: {activity_preferences}. Budget: {budget}. Flight Class: {flight_class}. Hotel Rating: {hotel_rating}. "
-            f"Visa Requirement: {visa_required}. Travel Insurance: {travel_insurance}. Research: {getattr(research_results, 'content', 'No research data')}. "
-            f"Flights: {json.dumps(cheapest_flights) if cheapest_flights else 'No flight data'}. Hotels & Restaurants: {getattr(hotel_restaurant_results, 'content', 'No hotel data')}."
+            f"Visa Requirement: {visa_required}. Travel Insurance: {travel_insurance}. Research: {research_results.content}. "
+            f"Flights: {json.dumps(cheapest_flights)}. Hotels & Restaurants: {hotel_restaurant_results.content}."
         )
-        try:
-            itinerary = planner.run(planning_prompt, stream=False)
-        except Exception as e:
-            st.error(f"Itinerary creation failed: {str(e)}")
-            itinerary = type('obj', (object,), {'content': 'Itinerary creation failed due to API limitations. Please try again later.'})
+        itinerary = planner.run(planning_prompt, stream=False)
 
     # Display Results
     st.subheader("✈️ Cheapest Flight Options")
@@ -313,21 +229,33 @@ if st.button("🚀 Generate Travel Plan"):
         cols = st.columns(len(cheapest_flights))
         for idx, flight in enumerate(cheapest_flights):
             with cols[idx]:
-                airline_logo = flight.get("airline_logo", "https://via.placeholder.com/100x50.png?text=Airline")
+                airline_logo = flight.get("airline_logo", "")
                 airline_name = flight.get("airline", "Unknown Airline")
                 price = flight.get("price", "Not Available")
                 total_duration = flight.get("total_duration", "N/A")
                 
                 flights_info = flight.get("flights", [{}])
-                departure = flights_info[0].get("departure_airport", {}) if flights_info else {}
-                arrival = flights_info[-1].get("arrival_airport", {}) if flights_info else {}
+                departure = flights_info[0].get("departure_airport", {})
+                arrival = flights_info[-1].get("arrival_airport", {})
+                airline_name = flights_info[0].get("airline", "Unknown Airline") 
                 
                 departure_time = format_datetime(departure.get("time", "N/A"))
                 arrival_time = format_datetime(arrival.get("time", "N/A"))
                 
-                # Simple booking link (mock)
-                booking_link = "https://www.google.com/travel/flights"
+                departure_token = flight.get("departure_token", "")
 
+                if departure_token:
+                    params_with_token = {
+                        **params,
+                        "departure_token": departure_token  # Add the token here
+                    }
+                    search_with_token = GoogleSearch(params_with_token)
+                    results_with_booking = search_with_token.get_dict()
+
+                    booking_options = results_with_booking['best_flights'][idx]['booking_token']
+
+                booking_link = f"https://www.google.com/travel/flights?tfs="+booking_options if booking_options else "#"
+                print(booking_link)
                 # Flight card layout
                 st.markdown(
                     f"""
@@ -365,9 +293,9 @@ if st.button("🚀 Generate Travel Plan"):
         st.warning("⚠️ No flight data available.")
 
     st.subheader("🏨 Hotels & Restaurants")
-    st.write(getattr(hotel_restaurant_results, 'content', 'No hotel data available'))
+    st.write(hotel_restaurant_results.content)
 
     st.subheader("🗺️ Your Personalized Itinerary")
-    st.write(getattr(itinerary, 'content', 'No itinerary available'))
+    st.write(itinerary.content)
 
     st.success("✅ Travel plan generated successfully!")
